@@ -1,5 +1,4 @@
 import random as rand
-import math as m
 
 
 def relu(x):
@@ -29,17 +28,31 @@ class Neuron:
                 
 
 class Layer:
-    def __init__(self, n_layer, anzahl_neuronen, anzahl_inputs, input_layer, is_first_layer):
+    def __init__(self, n_layer, anzahl_neuronen, anzahl_inputs, input_layer):
+        if n_layer == 0:
+            is_first_layer = True
+        else:
+            is_first_layer = False
+            
         Neuronen = []
         for i in range(0, anzahl_neuronen):
             Neuronen.append(Neuron(anzahl_inputs, is_first_layer))
         
         self.Neuronen = Neuronen
-        self.is_first_layer = is_first_layer
+        self.n_layer = n_layer
         self.input_layer = input_layer
         
     def berechnung(self):
-        if self.is_first_layer == False:
+        if self.n_layer == 0:
+            pass
+        elif self.n_layer == 3:
+            summe = 0
+            n_input_Neuron = 0
+            for input_Neuron in self.input_layer.Neuronen:
+                summe += input_Neuron.value * self.Neuronen[0].gewichte[n_input_Neuron]
+                n_input_Neuron += 1
+            self.Neuronen[0].value = summe + self.Neuronen[0].bias
+        else:
             for Neuron in self.Neuronen:
                 summe = 0
                 n_input_Neuron = 0
@@ -48,31 +61,25 @@ class Layer:
                     n_input_Neuron += 1
                 Neuron.value = relu(summe + Neuron.bias)
                 
-        else:
-            n = 0
-            for Neuron in self.Neuronen:
-                Neuron.value = self.input_layer[n]
-                n += 1
-                
             
         
-def netz_berechnung(inputs):
-    
-    layer_a.berechnung()
-    layer_b.berechnung()
-    layer_c.berechnung()
-    layer_d.berechnung()
-    return layer_d.Neuronen[0].value
+def netz_berechnung(inputs, layers):
+    for i in range (0,3):
+        layers[0].Neuronen[i].value = inputs[i]
+    layers[1].berechnung()
+    layers[2].berechnung()
+    layers[3].berechnung()
+    return layers[3].Neuronen[0].value
 
 
-def loss(daten):
+def loss(daten, layers):
 
     loss = 0
     
     for i in daten.values():
         inputs = [i["input1"], i["input2"], i["input3"]]
-        loss += (netz_berechnung(inputs) - i["output"])**2
-    return loss
+        loss += (netz_berechnung(inputs, layers) - i["output"])**2
+    return loss/len(daten)
 
     
 def make_loss_function(layer, Neuron, gewicht, daten, layers):
@@ -81,7 +88,7 @@ def make_loss_function(layer, Neuron, gewicht, daten, layers):
     def f(x):
         original_wert = layers[layer].Neuronen[Neuron].gewichte[gewicht]
         layers[layer].Neuronen[Neuron].gewichte[gewicht] = x
-        loss_value = loss(daten)
+        loss_value = loss(daten, layers)
         layers[layer].Neuronen[Neuron].gewichte[gewicht] = original_wert
         
         return loss_value
@@ -94,33 +101,35 @@ def make_loss_function_bias(layer, Neuron, daten, layers):
     def f(x):
         original_wert = layers[layer].Neuronen[Neuron].bias
         layers[layer].Neuronen[Neuron].bias = x
-        loss_value = loss(daten)
+        loss_value = loss(daten, layers)
         layers[layer].Neuronen[Neuron].bias = original_wert
         return loss_value
     
     return f
 
-def gradient_descent(n_layer, n_Neuron, n_gewicht, daten, layers):
+def gradient_descent(n_layer, n_Neuron, n_gewicht, daten, layers, learnrate):
     layer = layers[n_layer]
     loss_function = make_loss_function(n_layer, n_Neuron, n_gewicht, daten, layers)
     
     original_wert = layer.Neuronen[n_Neuron].gewichte[n_gewicht]
     ableitung = deriv(loss_function, original_wert)
     
-    return original_wert - 0.1 * ableitung
+    return original_wert - learnrate * ableitung
 
-def gradient_descent_bias(n_layer, n_Neuron, daten, layers):
+def gradient_descent_bias(n_layer, n_Neuron, daten, layers, learnrate):
     layer = layers[n_layer]
     loss_function = make_loss_function_bias(n_layer, n_Neuron, daten, layers)
     original_wert = layer.Neuronen[n_Neuron].bias
     ableitung = deriv(loss_function, original_wert)
     
-    return original_wert - 0.1 * ableitung
+    return original_wert - learnrate * ableitung
     
 
 
 
-def epoche(daten, layers):
+def epoche(daten, layers, n_epoche):
+    learnrate = 0.003
+    
     n_layer = 0
     for layer in layers:
         n_Neuron = 0
@@ -129,10 +138,10 @@ def epoche(daten, layers):
             n_gewicht = 0
             
             for gewicht in Neuron.gewichte:
-                layers[n_layer].Neuronen[n_Neuron].gewichte[n_gewicht] = gradient_descent(n_layer, n_Neuron, n_gewicht, daten, layers)
+                layers[n_layer].Neuronen[n_Neuron].gewichte[n_gewicht] = gradient_descent(n_layer, n_Neuron, n_gewicht, daten, layers, learnrate)
                 
                 n_gewicht += 1
-            layers[n_layer].Neuronen[n_Neuron].bias = gradient_descent_bias(n_layer, n_Neuron, daten, layers)
+            layers[n_layer].Neuronen[n_Neuron].bias = gradient_descent_bias(n_layer, n_Neuron, daten, layers, learnrate)
             n_Neuron += 1
         n_layer += 1
     
@@ -140,14 +149,10 @@ def epoche(daten, layers):
 
 
 
-
-
-inputs = [0, 0, 0]        
-
-layer_a = Layer(1, 3, 3, inputs, True)
-layer_b = Layer(2, 18, 3, layer_a, False)
-layer_c = Layer(3, 8, 18, layer_b, False)
-layer_d = Layer(4, 1, 8, layer_c, False)
+layer_a = Layer(0, 3, 3, None)
+layer_b = Layer(1, 18, 3, layer_a)
+layer_c = Layer(2, 8, 18, layer_b)
+layer_d = Layer(3, 1, 8, layer_c)
 
 layers = [layer_a, layer_b, layer_c, layer_d]
 
@@ -181,13 +186,43 @@ daten = {"Datensatz1": {"input1": 3, "input2": 4, "input3": 0, "output": 5.0},
     "Datensatz27": {"input1": 12.6, "input2": -12.8, "input3": 3.3, "output": 18.262},
     "Datensatz28": {"input1": 5.6, "input2": -5.1, "input3": 1.9, "output": 7.809},
     "Datensatz29": {"input1": 7.2, "input2": -2.9, "input3": -7.4, "output": 10.724},
-    "Datensatz30": {"input1": 3.4, "input2": -1.9, "input3": -8.0, "output": 8.898}}
+    "Datensatz30": {"input1": 3.4, "input2": -1.9, "input3": -8.0, "output": 8.898},
+    "Datensatz31": {"input1": 5.6, "input2": -19.0, "input3": -9.0, "output": 21.757},
+    "Datensatz32": {"input1": -11.1, "input2": 9.5, "input3": 7.1, "output": 16.244},
+    "Datensatz33": {"input1": 15.7, "input2": -16.5, "input3": -3.1, "output": 22.986},
+    "Datensatz34": {"input1": -18.8, "input2": -11.3, "input3": 0.2, "output": 21.936},
+    "Datensatz35": {"input1": -18.9, "input2": -12.0, "input3": 6.0, "output": 23.178},
+    "Datensatz36": {"input1": 1.8, "input2": -11.2, "input3": 3.6, "output": 11.901},
+    "Datensatz37": {"input1": 12.4, "input2": -19.7, "input3": 12.2, "output": 26.281},
+    "Datensatz38": {"input1": 7.9, "input2": -6.4, "input3": -13.8, "output": 17.141},
+    "Datensatz39": {"input1": 18.3, "input2": -6.5, "input3": -16.3, "output": 25.354},
+    "Datensatz40": {"input1": -16.1, "input2": 13.9, "input3": 4.1, "output": 21.662},
+    "Datensatz41": {"input1": 12.3, "input2": 9.2, "input3": 1.4, "output": 15.424},
+    "Datensatz42": {"input1": 18.9, "input2": -4.9, "input3": 2.1, "output": 19.637},
+    "Datensatz43": {"input1": 13.2, "input2": 4.7, "input3": 14.5, "output": 20.164},
+    "Datensatz44": {"input1": 3.1, "input2": 8.2, "input3": -18.2, "output": 20.201},
+    "Datensatz45": {"input1": -10.9, "input2": -8.4, "input3": -16.8, "output": 21.717},
+    "Datensatz46": {"input1": -10.7, "input2": -16.0, "input3": -8.9, "output": 21.206},
+    "Datensatz47": {"input1": 5.4, "input2": -5.4, "input3": -5.2, "output": 9.239},
+    "Datensatz48": {"input1": -11.6, "input2": -9.3, "input3": 17.5, "output": 22.963},
+    "Datensatz49": {"input1": 5.9, "input2": 4.4, "input3": -13.2, "output": 15.113},
+    "Datensatz50": {"input1": 9.2, "input2": -13.5, "input3": -4.8, "output": 17.027},
+    "Datensatz51": {"input1": 19.6, "input2": 5.6, "input3": 2.3, "output": 20.514},
+    "Datensatz52": {"input1": 7.4, "input2": 13.7, "input3": 11.0, "output": 19.064},
+    "Datensatz53": {"input1": -10.8, "input2": -18.7, "input3": -7.4, "output": 22.827},
+    "Datensatz54": {"input1": -9.3, "input2": -11.6, "input3": 17.7, "output": 23.116},
+    "Datensatz55": {"input1": 15.1, "input2": -7.4, "input3": 6.2, "output": 17.922},
+    "Datensatz56": {"input1": -4.2, "input2": 16.6, "input3": -1.6, "output": 17.198},
+    "Datensatz57": {"input1": -9.4, "input2": -10.1, "input3": 2.5, "output": 14.022},
+    "Datensatz58": {"input1": -9.5, "input2": 3.4, "input3": 15.9, "output": 18.831},
+    "Datensatz59": {"input1": -4.0, "input2": -11.2, "input3": 19.9, "output": 23.183},
+    "Datensatz60": {"input1": 0.4, "input2": -16.4, "input3": -18.1, "output": 24.428}}
     
         
 
-for i in range(0,20):
-    epoche(daten, layers)
-    print(loss(daten))
+for i in range(0,100):
+    epoche(daten, layers, i)
+    print(f"Epoche {i}: {loss(daten, layers)}")
 
 Fx = float(input("Fx:"))
 Fy = float(input("Fy:"))
@@ -195,7 +230,7 @@ Fz = float(input("Fz:"))
 
 inputs = [Fx, Fy, Fz]
 
-print(netz_berechnung(inputs))
+print(netz_berechnung(inputs, layers))
 
 
     
