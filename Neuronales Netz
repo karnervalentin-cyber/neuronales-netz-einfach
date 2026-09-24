@@ -5,11 +5,8 @@ def relu(x):
     if x > 0:
         return x
     else:
-        return 0
-    
-def deriv(f, x, h=10**-6):
-    return (f(x + h) - f(x))/h
-    
+        return x / 100
+      
 
 class Neuron:
     def __init__(self, anzahl_inputs, is_first_layer):
@@ -22,7 +19,8 @@ class Neuron:
             
         self.gewichte = gewichte
         self.bias = rand.uniform(-1, 1)
-        self.value = 0
+        self.value = None
+        self.ableitung = None
     
 
                 
@@ -72,83 +70,36 @@ def netz_berechnung(inputs, layers):
     return layers[3].Neuronen[0].value
 
 
-def loss(daten, layers):
-
-    loss = 0
-    
-    for i in daten.values():
-        inputs = [i["input1"], i["input2"], i["input3"]]
-        loss += (netz_berechnung(inputs, layers) - i["output"])**2
-    return loss/len(daten)
-
-    
-def make_loss_function(layer, Neuron, gewicht, daten, layers):
-    
-    
-    def f(x):
-        original_wert = layers[layer].Neuronen[Neuron].gewichte[gewicht]
-        layers[layer].Neuronen[Neuron].gewichte[gewicht] = x
-        loss_value = loss(daten, layers)
-        layers[layer].Neuronen[Neuron].gewichte[gewicht] = original_wert
-        
-        return loss_value
-    
-    
-    return f
-
-def make_loss_function_bias(layer, Neuron, daten, layers):
-    
-    def f(x):
-        original_wert = layers[layer].Neuronen[Neuron].bias
-        layers[layer].Neuronen[Neuron].bias = x
-        loss_value = loss(daten, layers)
-        layers[layer].Neuronen[Neuron].bias = original_wert
-        return loss_value
-    
-    return f
-
-def gradient_descent(n_layer, n_Neuron, n_gewicht, daten, layers, learnrate):
-    layer = layers[n_layer]
-    loss_function = make_loss_function(n_layer, n_Neuron, n_gewicht, daten, layers)
-    
-    original_wert = layer.Neuronen[n_Neuron].gewichte[n_gewicht]
-    ableitung = deriv(loss_function, original_wert)
-    
-    return original_wert - learnrate * ableitung
-
-def gradient_descent_bias(n_layer, n_Neuron, daten, layers, learnrate):
-    layer = layers[n_layer]
-    loss_function = make_loss_function_bias(n_layer, n_Neuron, daten, layers)
-    original_wert = layer.Neuronen[n_Neuron].bias
-    ableitung = deriv(loss_function, original_wert)
-    
-    return original_wert - learnrate * ableitung
-    
 
 
 
-def epoche(daten, layers, n_epoche):
-    learnrate = 0.003
+def back_propagation(datensatz, layers):
+    inputs = [datensatz["input1"], datensatz["input2"], datensatz["input3"]]
+    Prediction = netz_berechnung(inputs, layers)
+    layers[3].Neuronen[0].ableitung = 2 * (Prediction - datensatz["output"])
+    loss = (Prediction - datensatz["output"])**2
     
-    n_layer = 0
-    for layer in layers:
-        n_Neuron = 0
-        
-        for Neuron in layer.Neuronen:
-            n_gewicht = 0
+    
+    for n_Layer in range(len(layers)-2, 0, -1):
+        for n_Neuron in range(len(layers[n_Layer].Neuronen)):
+            summe_ableitungen = 0
+            for n_Neuron_vorne in range(len(layers[n_Layer + 1].Neuronen)):
+                summe_ableitungen += layers[n_Layer + 1].Neuronen[n_Neuron_vorne].ableitung * layers[n_Layer + 1].Neuronen[n_Neuron_vorne].gewichte[n_Neuron]
+            if layers[n_Layer].Neuronen[n_Neuron].value > 0:
+                layers[n_Layer].Neuronen[n_Neuron].ableitung = summe_ableitungen
+            else:
+                layers[n_Layer].Neuronen[n_Neuron].ableitung = 0
+    
+    return loss
+
+def gradient_descent(layers, learnrate):
+    for n_Layer in range(1, len(layers)):
+        for n_Neuron in range(len(layers[n_Layer].Neuronen)):
+            for n_gewicht in range(len(layers[n_Layer].Neuronen[n_Neuron].gewichte)):
+                layers[n_Layer].Neuronen[n_Neuron].gewichte[n_gewicht] -= layers[n_Layer].Neuronen[n_Neuron].ableitung * layers[n_Layer-1].Neuronen[n_gewicht].value * learnrate
+            layers[n_Layer].Neuronen[n_Neuron].bias -= layers[n_Layer].Neuronen[n_Neuron].ableitung * learnrate
             
-            for gewicht in Neuron.gewichte:
-                layers[n_layer].Neuronen[n_Neuron].gewichte[n_gewicht] = gradient_descent(n_layer, n_Neuron, n_gewicht, daten, layers, learnrate)
-                
-                n_gewicht += 1
-            layers[n_layer].Neuronen[n_Neuron].bias = gradient_descent_bias(n_layer, n_Neuron, daten, layers, learnrate)
-            n_Neuron += 1
-        n_layer += 1
-    
-
-
-
-
+            
 layer_a = Layer(0, 3, 3, None)
 layer_b = Layer(1, 18, 3, layer_a)
 layer_c = Layer(2, 8, 18, layer_b)
@@ -217,36 +168,41 @@ daten = {"Datensatz1": {"input1": 3, "input2": 4, "input3": 0, "output": 5.0},
     "Datensatz58": {"input1": -9.5, "input2": 3.4, "input3": 15.9, "output": 18.831},
     "Datensatz59": {"input1": -4.0, "input2": -11.2, "input3": 19.9, "output": 23.183},
     "Datensatz60": {"input1": 0.4, "input2": -16.4, "input3": -18.1, "output": 24.428}}
-    
-        
 
-for i in range(0,100):
-    epoche(daten, layers, i)
-    print(f"Epoche {i}: {loss(daten, layers)}")
+def status(layers):
+    for layer in layers:
+        for Neuron in layer.Neuronen:
+            print(Neuron.gewichte)
+            print(Neuron.bias)
 
-Fx = float(input("Fx:"))
-Fy = float(input("Fy:"))
-Fz = float(input("Fz:"))
-
-inputs = [Fx, Fy, Fz]
-
-print(netz_berechnung(inputs, layers))
-
-
-    
-
-    
-    
-
-
-
-
-
+def training(daten, layers, epochen, learnrate):
+    for epoche in range(0,epochen):
+        loss = 0
+        for datensatz in daten.values():
+            loss += back_propagation(datensatz, layers)
+            gradient_descent(layers, learnrate)
+        print(f"dLoss zur Epoche {epoche} = {loss/len(daten)}")
 
         
+            
+if __name__ == "__main__":
+    training(daten, layers, 1500, learnrate = 0.0003)
+    st_jn = int(input())
+
+    if st_jn == 1:
+        print(status(layers))
+
+    Fx = float(input("Fx:"))
+    Fy = float(input("Fy:"))
+    Fz = float(input("Fz:"))
+
+    inputs = [Fx, Fy, Fz]
+
+    print(netz_berechnung(inputs, layers))
 
 
-
-
-
+        
+    
+            
+            
 
